@@ -1,0 +1,18 @@
+[project]
+name = "instrument-control"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Viktor Doychinov", email = "v.doychinov@bradford.ac.uk" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "psutil>=7.0.0",
+    "pyvisa-py>=0.8.0",
+    "zeroconf>=0.147.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.9,<0.9.0"]
+build-backend = "uv_build"

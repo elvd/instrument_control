@@ -15,3 +15,6 @@ uv.lock
 .python-version
 .ropeproject/
 .zed
+
+*.log
+*.pdf

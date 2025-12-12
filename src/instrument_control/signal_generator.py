@@ -18,7 +18,7 @@ import pyvisa
 
 
 class SignalGenerator:
-    """Remote control of a Keysight Signal Generator using SCPI cmds.
+    """Remote control of a Keysight Signal Generator using SCPI commands.
 
     A class representation of a Keysight Signal Generator, that provides
     remote control capabilities through the use of SCPI commands. A connection
@@ -52,7 +52,6 @@ class SignalGenerator:
 
     def __init__(
         self,
-        visamr: pyvisa.ResourceManager,
         address: Union[str, int],
         instr_name: str = "SigGen",
         query_delay: float = 0.25,
@@ -104,8 +103,10 @@ class SignalGenerator:
         else:
             raise RuntimeError("Only IPv4 and GPIB addresses are supported")
 
+        self._rm = pyvisa.ResourceManager()
+
         try:
-            self._instr_conn = visamr.open_resource(
+            self._instr_conn = self._rm.open_resource(
                 instr_address, read_termination="\n", write_termination="\n"
             )
         except pyvisa.VisaIOError as error:
@@ -136,6 +137,7 @@ class SignalGenerator:
         self.reset()
         self.log_details()
 
+    # WARN Does not get called when `exit()`-ing from a REPL. Context Manager?
     def __del__(self):
         """Destructor
 

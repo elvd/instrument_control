@@ -4,18 +4,21 @@ Currently only Keysight's N9000A is included and supported. A lot of work to
 be done, including splitting this into base and inherited classes.
 """
 
+from __future__ import annotations
+
+import sys
 import time
-import datetime
-import logging
-from typing import Union, Optional
 from ipaddress import ip_address
+from typing import Union
+
+import loguru
 import pyvisa
 
 
-class N9000A:
-    """Remote control of an Keysight N9000A Spectrum Analyser using SCPI cmds.
+class SpectrumAnalyser:
+    """Remote control of an Keysight Spectrum Analyser using SCPI commands.
 
-    A class representation of a Keysight N9000A Spectrum Analyser, that
+    A class representation of a Keysight Spectrum Analyser, that
     provides remote control capabilities through the use of SCPI commands. A
     connection is established over a GPIB or a LAN interface. Currently only
     very basic functionality is supported.
@@ -48,9 +51,12 @@ class N9000A:
         mod_state: A `bool` showing whether modulation is enabled or not.
     """
 
-    def __init__(self, visamr: pyvisa.ResourceManager,
-                 address: Union[str, int], instr_name: str,
-                 logger: logging.Logger = None):
+    def __init__(
+        self,
+        address: Union[str, int],
+        instr_name: str = "SpecAn",
+        query_delay: float = 0.25,
+    ):
         """Establishes a VISA connection to an instrument and presets it
 
         Establishes a remote connection to a Keysight N9000A Spectrum Analyser,
@@ -78,107 +84,116 @@ class N9000A:
                           a remote connection to the instrument cannot be
                           established.
         """
-
-        self.logger = logger if logger is not None else self.__get_logger()
+        self.name = instr_name
+        self.logger = self.__get_logger()
 
         if isinstance(address, str):
             try:
                 ip_address(address)
                 instr_address = f"TCPIP0::{address}::inst0::INSTR"
             except ValueError as error:
-                logger.warning("%s is not a valid IP address", address)
+                self.logger.warning(f"{address} is not a valid IP address")
                 raise ValueError("Please use a valid IP address") from error
 
         elif isinstance(address, int):
             if 0 <= address <= 30:
                 instr_address = f"GPIB0::{address}::INSTR"
             else:
-                logger.warning("%d is not a valid GPIB address", address)
+                self.logger.warning(f"{address} is not a valid GPIB address")
                 raise ValueError("Please use a valid GPIB address")
         else:
             raise RuntimeError("Only IPv4 and GPIB addresses are supported")
 
+        self._rm = pyvisa.ResourceManager()
+
         try:
-            self._instr_conn = visamr.open_resource(
+            self._instr_conn = self._rm.open_resource(
                 instr_address, read_termination="\n", write_termination="\n"
             )
         except pyvisa.VisaIOError as error:
-            logger.critical("Could not connect to %s", instr_name)
-            logger.critical("Error message: %s", error.args)
+            self.logger.critical(f"Could not connect to {instr_name}")
+            self.logger.critical(f"Error message: {error.args}")
             raise RuntimeError("Could not connect to instrument") from error
         else:
-            self.name = instr_name
-            self.logger.info("Established connection to %s", self.name)
+            self.logger.info(f"Established connection to {instr_address}")
 
+        self.query_delay = query_delay
 
-        self.query_delay = 0.25
-
-        self.vendor: Optional[str] = None
-        self.model_number: Optional[str] = None
-        self.serial_number: Optional[str] = None
-        self.fw_version: Optional[str] = None
+        self.vendor: str = ""
+        self.model_number: str = ""
+        self.serial_number: str = ""
+        self.fw_version: str = ""
 
         self.reset()
-        self._log_details()
+        self.log_details()
 
+    # WARN Does not get called when `exit()`-ing from a REPL. Context Manager?
     def __del__(self):
         """Destructor
 
         Makes sure to close the VISA connection to the instrument before the
         object is deleted.
         """
-        self.logger.info("Closing connection to %s", self.name)
-        self.instr_conn.close()
+        self.logger.info(f"Closing connection to {self.name}")
+        self._instr_conn.close()
 
-    def __get_logger(self) -> logging.Logger:
-        """Sets up a `Logger` object for diagnostic and debug
+    def __str__(self) -> str:
+        """Human-friendly summary of the instrument we are connected to
 
-        A standard function to set up and configure a Python `Logger` object
+        Returns a more human-friendly summary of the main details of the
+        instrument to which we are connected, including the VISA address.
+        """
+        return (
+            f"{self.vendor} {self.model_number} connected on "
+            f"{self._instr_conn.resource_name} with alias {self.name}.\n"
+            f"Serial number: {self.serial_number}\n"
+            f"Firmware version: {self.fw_version}"
+        )
+
+    def __get_logger(self) -> loguru.Logger:
+        """Sets up a `loguru.Logger` object for diagnostic and debug
+
+        A standard function to set up and configure a `loguru.Logger` object
         for recording diagnostic and debug data.
 
         Args:
             None
 
         Returns:
-            A `Logger` object with appropriate configurations. All the messages
-            are duplicated to the command prompt as well.
+            A `loguru.Logger` object with appropriate configurations. All the
+            messages are duplicated to `stderr` as well.
 
         Raises:
             Nothing
         """
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = "_".join([self.name, timestamp])
-        log_filename = ".".join([log_filename, "log"])
+        from loguru import logger
 
-        logger = logging.getLogger(self.name)
-
-        logger_handler = logging.FileHandler(log_filename)
-        logger_handler.setLevel(logging.INFO)
-
-        fmt_str = "{asctime:s} {msecs:.3f} \t {levelname:^10s} \t {message:s}"
-        datefmt_string = "%Y-%m-%d %H:%M:%S"
-        logger_formatter = logging.Formatter(
-            fmt=fmt_str, datefmt=datefmt_string, style="{"
+        logger.remove()
+        logger.add(
+            sys.stderr,
+            format=(
+                "[<red>{time:YYYY-MM-DDTHH:mm:ss.SSSSSS!UTC}</red>]\t"
+                "<yellow>{level}</yellow>\t"
+                "<cyan>{message}</cyan>\t"
+                "<white>{extra}</white>"
+            ),
+        )
+        logger.add(
+            f"{self.name}.log",
+            format=(
+                "[<red>{time}</red>]\t"
+                "<yellow>{level}</yellow>\t"
+                "<cyan>{message}</cyan>\t"
+                "<white>{extra}</white>"
+            ),
+            rotation="100 KB",
         )
 
-        # * This is to ensure consistent formatting of the miliseconds field
-        logger_formatter.converter = time.gmtime
-
-        logger_handler.setFormatter(logger_formatter)
-        logger.addHandler(logger_handler)
-
-        # * This enables the streaming of messages to stdout
-        logging.basicConfig(
-            format=fmt_str,
-            datefmt=datefmt_string,
-            style="{",
-            level=logging.INFO,
-        )
-        logger.info("Logger configuration done")
+        logger.info("Logger set up")
 
         return logger
 
-    def _op_complete(self):
+    def _op_complete(self) -> bool:
         """Waits for operation to complete
 
         Queries the instrument for completion of any pending operations. The
@@ -188,7 +203,8 @@ class N9000A:
             A `True` or `False` boolean value. Should only ever return `True`
         """
 
-        response = self.instr_conn.query("*OPC?", self.query_delay)
+        response = self._instr_conn.query("*OPC?", self.query_delay)
+
         return response.lower() == "1"
 
     def reset(self):
@@ -198,45 +214,35 @@ class N9000A:
         and to clear the status register of the instrument.
         """
 
-        self.instr_conn.write("*RST")
+        self._instr_conn.write("*RST")
         time.sleep(self.query_delay)
-        self.instr_conn.write("*CLS")
+        self._instr_conn.write("*CLS")
         time.sleep(self.query_delay)
-        self.instr_conn.write(":INIT:CONT ON")
+        self._instr_conn.write(":INIT:CONT ON")
 
-    def _log_details(self):
+        self.logger.info("Instrument reset and initialised")
+
+    def log_details(self):
         """Logs instrument-specific details
 
         An internal function to log an instrument's vendor, model number, and
         other relevant details.
         """
 
-        idn_response = self.instr_conn.query("*IDN?", self.query_delay)
-        (self.vendor,
-         self.model_number,
-         self.serial_number,
-         self.fw_version) = idn_response.split(",")
+        idn_response = self._instr_conn.query("*IDN?", self.query_delay)
+        (
+            self.vendor,
+            self.model_number,
+            self.serial_number,
+            self.fw_version,
+        ) = idn_response.split(",")
 
         self.vendor = self.vendor.strip()
         self.model_number = self.model_number.strip()
         self.serial_number = self.serial_number.strip()
         self.fw_version = self.fw_version.strip()
 
-        self.logger.info("Instrument vendor: %s", self.vendor)
-        self.logger.info("Instrument model number: %s", self.model_number)
-        self.logger.info("Instrument serial number: %s", self.serial_number)
-        self.logger.info("Instrument firmware version: %s", self.fw_version)
-
-    @property
-    def details(self):
-        """Human-friendly summary of the instrument we are connected to
-
-        Returns a more human-friendly summary of the main details of the
-        instrument to which we are connected, including the VISA address.
-        """
-        print(
-            f"{self.vendor} {self.model_number} connected on "
-            f"{self.instr_conn.resource_name} with alias {self.name}.\n"
-            f"Serial number: {self.serial_number}\n"
-            f"Firmware version: {self.fw_version}"
-        )
+        self.logger.info(f"Instrument vendor: {self.vendor}")
+        self.logger.info(f"Instrument model number: {self.model_number}")
+        self.logger.info(f"Instrument serial number: {self.serial_number}")
+        self.logger.info(f"Instrument firmware version: {self.fw_version}")

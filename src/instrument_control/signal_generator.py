@@ -5,13 +5,15 @@ and supported. A lot of work to be done, including splitting this into base
 and inherited classes.
 """
 
-import datetime
-import logging
+from __future__ import annotations
+
 import math
+import sys
 import time
 from ipaddress import ip_address
-from typing import Optional, Union
+from typing import Union
 
+import loguru
 import pyvisa
 
 
@@ -26,7 +28,7 @@ class SignalGenerator:
     Attributes:
         name: A `str` with a human-friendly name for the instrument, used to
               identify it in the logs.
-        logger: A `logging.Logger` object to which to save info and diagnostic
+        logger: A `loguru.Logger` object to which to save info and diagnostic
                 messages.
         query_delay: A `float` with the delay, in seconds, between VISA write
                      and read operations, default value of 250 ms.
@@ -54,7 +56,6 @@ class SignalGenerator:
         address: Union[str, int],
         instr_name: str = "SigGen",
         query_delay: float = 0.25,
-        logger: logging.Logger = None,
     ):
         """Establishes a VISA connection to an instrument and presets it
 
@@ -84,21 +85,21 @@ class SignalGenerator:
                           established.
         """
         self.name = instr_name
-        self.logger = logger if logger is not None else self.__get_logger()
+        self.logger = self.__get_logger()
 
         if isinstance(address, str):
             try:
                 ip_address(address)
                 instr_address = f"TCPIP0::{address}::inst0::INSTR"
             except ValueError as error:
-                logger.warning("%s is not a valid IP address", address)
+                self.logger.warning(f"{address} is not a valid IP address")
                 raise ValueError("Please use a valid IP address") from error
 
         elif isinstance(address, int):
             if 0 <= address <= 30:
                 instr_address = f"GPIB0::{address}::INSTR"
             else:
-                logger.warning("%d is not a valid GPIB address", address)
+                self.logger.warning(f"{address} is not a valid GPIB address")
                 raise ValueError("Please use a valid GPIB address")
         else:
             raise RuntimeError("Only IPv4 and GPIB addresses are supported")
@@ -108,17 +109,17 @@ class SignalGenerator:
                 instr_address, read_termination="\n", write_termination="\n"
             )
         except pyvisa.VisaIOError as error:
-            logger.critical("Could not connect to %s", instr_name)
-            logger.critical("Error message: %s", error.args)
+            self.logger.critical(f"Could not connect to {instr_name}")
+            self.logger.critical(f"Error message: {error.args}")
             raise RuntimeError("Could not connect to instrument") from error
         except Exception as error:
-            logger.critical(
-                "A different error ocurred when connecting to %s", instr_name
+            self.logger.critical(
+                f"A different error ocurred when connecting to {instr_name}"
             )
-            logger.critical("Error message: %s", error.args)
+            self.logger.critical(f"Error message: {error.args}")
             raise RuntimeError("Critical error") from error
         else:
-            self.logger.info("Established connection to %s", self.name)
+            self.logger.info(f"Established connection to {instr_address}")
 
         self.query_delay = query_delay
 
@@ -141,63 +142,71 @@ class SignalGenerator:
         Makes sure to close the VISA connection to the instrument before the
         object is deleted.
         """
-        self.logger.info("Closing connection to %s", self.name)
+        self.logger.info(f"Closing connection to {self.name}")
         response = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:OTIMe?", self.query_delay
         )
-        self.logger.info("Instrument has been on for %s hours", response)
+        self.logger.info(f"Instrument has been on for {response} hours")
 
         self._instr_conn.close()
 
-    def __get_logger(self) -> logging.Logger:
-        """Sets up a `Logger` object for diagnostic and debug
+    def __str__(self) -> str:
+        """Human-friendly summary of the instrument we are connected to
 
-        A standard function to set up and configure a Python `Logger` object
+        Returns a more human-friendly summary of the main details of the
+        instrument to which we are connected, including the VISA address.
+        """
+        return (
+            f"{self.vendor} {self.model_number} connected on "
+            f"{self._instr_conn.resource_name} with alias {self.name}.\n"
+            f"Serial number: {self.serial_number}\n"
+            f"Firmware version: {self.fw_version}"
+        )
+
+    def __get_logger(self) -> loguru.Logger:
+        """Sets up a `loguru.Logger` object for diagnostic and debug
+
+        A standard function to set up and configure a `loguru.Logger` object
         for recording diagnostic and debug data.
 
         Args:
             None
 
         Returns:
-            A `Logger` object with appropriate configurations. All the messages
-            are duplicated to the command prompt as well.
+            A `loguru.Logger` object with appropriate configurations. All the
+            messages are duplicated to `stderr` as well.
 
         Raises:
             Nothing
         """
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = "_".join([self.name, timestamp])
-        log_filename = ".".join([log_filename, "log"])
+        from loguru import logger
 
-        logger = logging.getLogger(self.name)
-
-        logger_handler = logging.FileHandler(log_filename)
-        logger_handler.setLevel(logging.INFO)
-
-        fmt_str = "{asctime:s} {msecs:.3f} \t {levelname:^10s} \t {message:s}"
-        datefmt_string = "%Y-%m-%d %H:%M:%S"
-        logger_formatter = logging.Formatter(
-            fmt=fmt_str, datefmt=datefmt_string, style="{"
+        logger.remove()
+        logger.add(
+            sys.stderr,
+            format=(
+                "[<red>{time:YYYY-MM-DDTHH:mm:ss.SSSSSS!UTC}</red>]\t"
+                "<yellow>{level}</yellow>\t"
+                "<cyan>{message}</cyan>\t"
+                "<white>{extra}</white>"
+            ),
+        )
+        logger.add(
+            f"{self.name}.log",
+            format=(
+                "[<red>{time}</red>]\t"
+                "<yellow>{level}</yellow>\t"
+                "<cyan>{message}</cyan>\t"
+                "<white>{extra}</white>"
+            ),
+            rotation="100 KB",
         )
 
-        # * This is to ensure consistent formatting of the miliseconds field
-        logger_formatter.converter = time.gmtime
-
-        logger_handler.setFormatter(logger_formatter)
-        logger.addHandler(logger_handler)
-
-        # * This enables the streaming of messages to stdout
-        logging.basicConfig(
-            format=fmt_str,
-            datefmt=datefmt_string,
-            style="{",
-            level=logging.INFO,
-        )
-        logger.info("Logger configuration done")
+        logger.info("Logger set up")
 
         return logger
 
-    def _op_complete(self):
+    def _op_complete(self) -> bool:
         """Waits for operation to complete
 
         Queries the instrument for completion of any pending operations. The
@@ -207,6 +216,7 @@ class SignalGenerator:
             A `True` or `False` boolean value. Should only ever return `True`
         """
         response = self._instr_conn.query("*OPC?", self.query_delay)
+
         return response.lower() == "1"
 
     def reset(self):
@@ -241,10 +251,10 @@ class SignalGenerator:
         self.serial_number = self.serial_number.strip()
         self.fw_version = self.fw_version.strip()
 
-        self.logger.info("Instrument vendor: %s", self.vendor)
-        self.logger.info("Instrument model number: %s", self.model_number)
-        self.logger.info("Instrument serial number: %s", self.serial_number)
-        self.logger.info("Instrument firmware version: %s", self.fw_version)
+        self.logger.info(f"Instrument vendor: {self.vendor}")
+        self.logger.info(f"Instrument model number: {self.model_number}")
+        self.logger.info(f"Instrument serial number: {self.serial_number}")
+        self.logger.info(f"Instrument firmware version: {self.fw_version}")
 
         self.boards_string = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:BOARds?", self.query_delay
@@ -255,11 +265,11 @@ class SignalGenerator:
             (name, part_number, serial_number, version_number, status) = (
                 board.split(",")
             )
-            self.logger.info("Board name: %s", name)
-            self.logger.info("Board part number: %s", part_number)
-            self.logger.info("Board serial number: %s", serial_number)
-            self.logger.info("Board version number: %s", version_number)
-            self.logger.info("Board status: %s", status)
+            self.logger.info(f"Board name: {name}")
+            self.logger.info(f"Board part number: {part_number}")
+            self.logger.info(f"Board serial number: {serial_number}")
+            self.logger.info(f"Board version number: {version_number}")
+            self.logger.info(f"Board status: {status}")
 
         self.options_string = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:OPTions:DETail?", self.query_delay
@@ -268,44 +278,30 @@ class SignalGenerator:
         options_info = self.options_string.split('"')[1::2]
         for option in options_info:
             (name, revision, dsp_version) = option.split(",")
-            self.logger.info("Option name: %s", name)
-            self.logger.info("Option revision: %s", revision)
-            self.logger.info("DSP version: %s", dsp_version)
+            self.logger.info(f"Option name: {name}")
+            self.logger.info(f"Option revision: {revision}")
+            self.logger.info(f"DSP version: {dsp_version}")
 
         response = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:SDATe?", self.query_delay
         )
-        self.logger.info("Date and time stamp of firmware: %s", response)
+        self.logger.info(f"Date and time stamp of firmware: {response}")
 
         response = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:OTIMe?", self.query_delay
         )
-        self.logger.info("Instrument has been on for %s hours", response)
+        self.logger.info(f"Instrument has been on for {response} hours")
 
         if self.model_number == "E8267D":
             response = self._instr_conn.query(
                 ":DIAGnostic:INFOrmation:CCOunt:ATTenuator?", self.query_delay
             )
-            self.logger.info("Number of attenuator switches: %s", response)
+            self.logger.info(f"Number of attenuator switches: {response}")
 
         response = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:CCOunt:PON?", self.query_delay
         )
-        self.logger.info("Times instrument has been turned on: %s", response)
-
-    @property
-    def details(self):
-        """Human-friendly summary of the instrument we are connected to
-
-        Returns a more human-friendly summary of the main details of the
-        instrument to which we are connected, including the VISA address.
-        """
-        print(
-            f"{self.vendor} {self.model_number} connected on "
-            f"{self._instr_conn.resource_name} with alias {self.name}.\n"
-            f"Serial number: {self.serial_number}\n"
-            f"Firmware version: {self.fw_version}"
-        )
+        self.logger.info(f"Times instrument has been turned on: {response}")
 
     @property
     def frequency(self) -> float:
@@ -340,12 +336,12 @@ class SignalGenerator:
         self._instr_conn.write(f":SOURce:FREQuency:CW {new_freq}Hz")
 
         if self._op_complete():
-            print(f"Frequency set to {new_freq}")
+            self.logger.info(f"Frequency set to {new_freq:.3e} Hz")
         else:
-            print(f"Error setting frequency to {new_freq}")
+            self.logger.info(f"Error setting frequency to {new_freq:.3e} Hz")
 
     @property
-    def power(self):
+    def power(self) -> float:
         """Returns the RF output power to which the Signal Generator is set
 
         Queries, if necessary, the RF output power to which the Signal
@@ -381,12 +377,12 @@ class SignalGenerator:
         )
 
         if self._op_complete():
-            print(f"Output power set to {new_power} dBm")
+            self.logger.info(f"Output power set to {new_power} dBm")
         else:
-            print(f"Error setting output power to {new_power} dBm")
+            self.logger.info(f"Error setting output power to {new_power} dBm")
 
     @property
-    def output(self):
+    def output(self) -> bool:
         """Returns the state of the Signal Generator's RF Output
 
         Queries and returns the state of the RF output. The return value of
@@ -399,6 +395,7 @@ class SignalGenerator:
         current_state = self._instr_conn.query(
             ":OUTPut:STATe?", self.query_delay
         )
+
         return current_state.lower() == "1" or current_state.lower() == "on"
 
     @output.setter
@@ -423,12 +420,12 @@ class SignalGenerator:
         self._instr_conn.write(f":OUTPut:STATe {new_state}")
 
         if self._op_complete():
-            print(f"Output enabled set to {new_state}")
+            self.logger.info(f"Output enabled set to {new_state}")
         else:
-            print(f"Error setting output enabled to {new_state}")
+            self.logger.info(f"Error setting output enabled to {new_state}")
 
     @property
-    def mod_state(self):
+    def mod_state(self) -> bool:
         """Returns the state of the Signal Generator's RF modulation setting
 
         Queries and returns the state of the RF modulation. The return value of
@@ -472,12 +469,14 @@ class SignalGenerator:
         self._instr_conn.write(f":OUTPut:MODulation:STATe {new_state}")
 
         if self._op_complete():
-            print(f"Modulation enabled set to {new_state}")
+            self.logger.info(f"Modulation enabled set to {new_state}")
         else:
-            print(f"Error setting demodulation enabled to {new_state}")
+            self.logger.info(
+                f"Error setting demodulation enabled to {new_state}"
+            )
 
     @property
-    def phase_continuous(self):
+    def phase_continuous(self) -> bool:
         """Phase Continuous Fine Sweep mode"""
         supported_options = ["U01", "U02", "U04", "U06"]
         if not any(
@@ -496,7 +495,7 @@ class SignalGenerator:
         """Sets Phase Continuous Fine Sweep Mode"""
         supported_options = ["U01", "U02", "U04", "U06"]
         if not any(
-            option in self._options_string for option in supported_options
+            option in self.options_string for option in supported_options
         ):
             raise RuntimeError("Functionality not available")
 
@@ -509,9 +508,11 @@ class SignalGenerator:
         self._instr_conn.write(f":SOURce:FREQuency:CONTinuous:MODE {new_state}")
 
         if self._op_complete():
-            print(f"Phase Continuous Fine Sweep Mode: {new_state}")
+            self.logger.info(f"Phase Continuous Fine Sweep Mode: {new_state}")
         else:
-            print(f"Error setting demodulation enabled to {new_state}")
+            self.logger.info(
+                f"Error setting demodulation enabled to {new_state}"
+            )
 
     def set_phase_reference(self):
         """Set the output phase reference to zero"""
@@ -519,12 +520,12 @@ class SignalGenerator:
 
         if self._op_complete():
             self.phase_ref_zeroed = True
-            print("Output phase reference set to zero")
+            self.logger.info("Output phase reference set to zero")
         else:
-            print("Error setting output phase reference to zero")
+            self.logger.info("Error setting output phase reference to zero")
 
     @property
-    def mod_signal_phase(self):
+    def mod_signal_phase(self) -> float:
         """Returns current phase adjustment of a modulating signal in radians"""
         if not self.phase_ref_zeroed:
             self.set_phase_reference()
@@ -544,6 +545,8 @@ class SignalGenerator:
         self._instr_conn.write(f":SOURce:PHASe:ADJust {new_phase}DEG")
 
         if self._op_complete():
-            print(f"Output phase reference set to {new_phase} DEG")
+            self.logger.info(f"Output phase reference set to {new_phase} DEG")
         else:
-            print(f"Error setting phase reference to {new_phase} DEG")
+            self.logger.info(
+                f"Error setting phase reference to {new_phase} DEG"
+            )

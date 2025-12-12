@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "loguru>=0.7.3",
     "psutil>=7.0.0",
     "pyvisa-py>=0.8.0",
     "zeroconf>=0.147.0",

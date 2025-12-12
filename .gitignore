@@ -13,3 +13,5 @@ wheels/
 uv.lock
 .ruff_cache/
 .python-version
+.ropeproject/
+.zed

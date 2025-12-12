@@ -1,15 +1,14 @@
 """Module holding Signal Generator Classes
 
-Currently only basic functionality for Keysight Signal Generators is included 
-and supported. A lot of work to be done, including splitting this into base 
+Currently only basic functionality for Keysight Signal Generators is included
+and supported. A lot of work to be done, including splitting this into base
 and inherited classes.
 """
 
+import datetime
+import logging
 import math
 import time
-import logging
-import datetime
-
 from ipaddress import ip_address
 from typing import Optional, Union
 
@@ -49,9 +48,14 @@ class SignalGenerator:
         mod_state: A `bool` showing whether modulation is enabled or not.
     """
 
-    def __init__(self, visamr: pyvisa.ResourceManager,
-                 address: Union[str, int], instr_name: str = "SigGen", 
-                 query_delay: float = 0.25, logger: logging.Logger = None):
+    def __init__(
+        self,
+        visamr: pyvisa.ResourceManager,
+        address: Union[str, int],
+        instr_name: str = "SigGen",
+        query_delay: float = 0.25,
+        logger: logging.Logger = None,
+    ):
         """Establishes a VISA connection to an instrument and presets it
 
         Establishes a remote connection to a Keysight Signal Generator,
@@ -118,29 +122,18 @@ class SignalGenerator:
 
         self.query_delay = query_delay
 
-        self.vendor: Optional[str] = None
-        self.model_number: Optional[str] = None
-        self.serial_number: Optional[str] = None
-        self.fw_version: Optional[str] = None
-        
-        self._options_string: Optional[str] = None
-        self._boards_string: Optional[str] = None
+        self.vendor: str = ""
+        self.model_number: str = ""
+        self.serial_number: str = ""
+        self.fw_version: str = ""
 
-        self._frequency: Optional[float] = None
-        self._frequency_unit = "Hz"
+        self.options_string: str = ""
+        self.boards_string: str = ""
 
-        self._power: Optional[float] = None
-        self._power_unit = "dBm"
-
-        self._phase_adjustment: Optional[float] = None
-
-        self._output_enabled: Optional[bool] = None
-        self._mod_enabled: Optional[bool] = None
-        self._phase_cont_mode: Optional[bool] = None
-        self._phase_ref_zeroed: Optional[bool] = None
+        self.phase_ref_zeroed: bool = False
 
         self.reset()
-        self._log_details()
+        self.log_details()
 
     def __del__(self):
         """Destructor
@@ -227,17 +220,21 @@ class SignalGenerator:
         self._instr_conn.write("*CLS")
         time.sleep(self.query_delay)
 
-    def _log_details(self):
+        self.logger.info("Instrument reset")
+
+    def log_details(self):
         """Logs instrument-specific details
 
         An internal function to log an instrument's vendor, model number, and
         other relevant details.
         """
         response = self._instr_conn.query("*IDN?", self.query_delay)
-        (self.vendor,
-         self.model_number,
-         self.serial_number,
-         self.fw_version) = response.split(",")
+        (
+            self.vendor,
+            self.model_number,
+            self.serial_number,
+            self.fw_version,
+        ) = response.split(",")
 
         self.vendor = self.vendor.strip()
         self.model_number = self.model_number.strip()
@@ -248,32 +245,33 @@ class SignalGenerator:
         self.logger.info("Instrument model number: %s", self.model_number)
         self.logger.info("Instrument serial number: %s", self.serial_number)
         self.logger.info("Instrument firmware version: %s", self.fw_version)
-        
-        self._boards_string = self._instr_conn.query(
+
+        self.boards_string = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:BOARds?", self.query_delay
         )
-        
-        boards_info = self._boards_string.split('"')[1::2]
+
+        boards_info = self.boards_string.split('"')[1::2]
         for board in boards_info:
-            (name, part_number, serial_number, 
-             version_number, status) = board.split(',')
+            (name, part_number, serial_number, version_number, status) = (
+                board.split(",")
+            )
             self.logger.info("Board name: %s", name)
             self.logger.info("Board part number: %s", part_number)
             self.logger.info("Board serial number: %s", serial_number)
             self.logger.info("Board version number: %s", version_number)
             self.logger.info("Board status: %s", status)
-            
-        self._options_string = self._instr_conn.query(
+
+        self.options_string = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:OPTions:DETail?", self.query_delay
         )
 
-        options_info = self._options_string.split('"')[1::2]
+        options_info = self.options_string.split('"')[1::2]
         for option in options_info:
-            (name, revision, dsp_version) = option.split(',')
+            (name, revision, dsp_version) = option.split(",")
             self.logger.info("Option name: %s", name)
             self.logger.info("Option revision: %s", revision)
             self.logger.info("DSP version: %s", dsp_version)
-            
+
         response = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:SDATe?", self.query_delay
         )
@@ -283,18 +281,18 @@ class SignalGenerator:
             ":DIAGnostic:INFOrmation:OTIMe?", self.query_delay
         )
         self.logger.info("Instrument has been on for %s hours", response)
-        
-        if (self.model_number == 'E8267D'):
+
+        if self.model_number == "E8267D":
             response = self._instr_conn.query(
                 ":DIAGnostic:INFOrmation:CCOunt:ATTenuator?", self.query_delay
             )
             self.logger.info("Number of attenuator switches: %s", response)
-        
+
         response = self._instr_conn.query(
             ":DIAGnostic:INFOrmation:CCOunt:PON?", self.query_delay
         )
         self.logger.info("Times instrument has been turned on: %s", response)
-        
+
     @property
     def details(self):
         """Human-friendly summary of the instrument we are connected to
@@ -310,7 +308,7 @@ class SignalGenerator:
         )
 
     @property
-    def frequency(self):
+    def frequency(self) -> float:
         """Returns the CW frequency to which the Signal Generator is set
 
         Queries, if necessary, the CW frequency to which the Signal Generator
@@ -320,11 +318,9 @@ class SignalGenerator:
             A `tuple` consisting of the frequency in Hz as a `float` and the
             unit used internally, as a `str`.
         """
-        if self._frequency is None:
-            self._frequency = float(self._instr_conn.query(
-                ":SOURce:FREQuency:CW?", self.query_delay
-            ))
-        return (self._frequency, self._frequency_unit)
+        return float(
+            self._instr_conn.query(":SOURce:FREQuency:CW?", self.query_delay)
+        )
 
     @frequency.setter
     def frequency(self, new_freq: Union[int, float]):
@@ -341,17 +337,12 @@ class SignalGenerator:
             new_freq: An `int` or a `float` with the new frequency.
                       The value should be in Hz.
         """
-        self._instr_conn.write(
-            f":SOURce:FREQuency:CW {new_freq}{self._frequency_unit}"
-        )
+        self._instr_conn.write(f":SOURce:FREQuency:CW {new_freq}Hz")
 
         if self._op_complete():
-            self._frequency = float(new_freq)
-            print(f"Frequency set to {self._frequency} {self._frequency_unit}")
+            print(f"Frequency set to {new_freq}")
         else:
-            print(
-                f"Error setting frequency to {new_freq} {self._frequency_unit}"
-            )
+            print(f"Error setting frequency to {new_freq}")
 
     @property
     def power(self):
@@ -364,11 +355,11 @@ class SignalGenerator:
             A `tuple` consisting of the power in dBm as a `float` and the
             unit used internally, as a `str`.
         """
-        if self._power is None:
-            self._power = float(self._instr_conn.query(
+        return float(
+            self._instr_conn.query(
                 ":SOURce:POWer:LEVel:IMMediate:AMPlitude?", self.query_delay
-            ))
-        return (self._power, self._power_unit)
+            )
+        )
 
     @power.setter
     def power(self, new_power: Union[int, float]):
@@ -386,17 +377,13 @@ class SignalGenerator:
                       The value should be in dBm.
         """
         self._instr_conn.write(
-            f":SOURce:POWer:LEVel:IMMediate:AMPlitude"
-            f" {new_power}{self._power_unit}"
+            f":SOURce:POWer:LEVel:IMMediate:AMPlitude {new_power}dBm"
         )
 
         if self._op_complete():
-            self._power = float(new_power)
-            print(f"Output power set to {self._power} {self._power_unit}")
+            print(f"Output power set to {new_power} dBm")
         else:
-            print(
-                f"Error setting output power to {new_power} {self._power_unit}"
-            )
+            print(f"Error setting output power to {new_power} dBm")
 
     @property
     def output(self):
@@ -409,14 +396,10 @@ class SignalGenerator:
         Returns:
             A `True` / `False` boolean value
         """
-        if self._output_enabled is None:
-            current_state = self._instr_conn.query(
-                ":OUTPut:STATe?", self.query_delay
-            )
-            self._output_enabled = (
-                current_state.lower() == "1" or current_state.lower() == "on"
-            )
-        return self._output_enabled
+        current_state = self._instr_conn.query(
+            ":OUTPut:STATe?", self.query_delay
+        )
+        return current_state.lower() == "1" or current_state.lower() == "on"
 
     @output.setter
     def output(self, new_state: Union[int, str]):
@@ -431,22 +414,16 @@ class SignalGenerator:
                        Other values will fail silently. This is still converted
                        to a boolean value internally.
         """
-        if not type(new_state) in (int, str):
+        if type(new_state) not in (int, str):
             raise ValueError(
                 """Acceptable values for this option are 1 / '1' / 'on' or
                 0 / '0' / 'off'"""
             )
-        
-        self._instr_conn.write(
-            f":OUTPut:STATe {new_state}"
-        )
+
+        self._instr_conn.write(f":OUTPut:STATe {new_state}")
 
         if self._op_complete():
-            new_state = str(new_state)
-            self._output_enabled = (
-                new_state.lower() == "1" or new_state.lower() == "on"
-            )
-            print(f"Output enabled set to {self._output_enabled}")
+            print(f"Output enabled set to {new_state}")
         else:
             print(f"Error setting output enabled to {new_state}")
 
@@ -461,17 +438,14 @@ class SignalGenerator:
         Returns:
             A `True` / `False` boolean value
         """
-        if "UNT" not in self._options_string and self.model_number != 'E8267D':
+        if "UNT" not in self.options_string and self.model_number != "E8267D":
             raise RuntimeError("Functionality not available")
-        
-        if self._mod_enabled is None:
-            current_state = self._instr_conn.query(
-                ":OUTPut:MODulation:STATe?", self.query_delay
-            )
-            self._mod_enabled = (
-                current_state.lower() == "1" or current_state.lower() == "on"
-            )
-        return self._mod_enabled
+
+        current_state = self._instr_conn.query(
+            ":OUTPut:MODulation:STATe?", self.query_delay
+        )
+
+        return current_state.lower() == "1" or current_state.lower() == "on"
 
     @mod_state.setter
     def mod_state(self, new_state: Union[int, str]):
@@ -486,111 +460,90 @@ class SignalGenerator:
                        Other values will fail silently. This is still converted
                        to a boolean value internally.
         """
-        if "UNT" not in self._options_string and self.model_number != 'E8267D':
+        if "UNT" not in self.options_string and self.model_number != "E8267D":
             raise RuntimeError("Functionality not available")
 
-        if not type(new_state) in (int, str):
+        if type(new_state) not in (int, str):
             raise ValueError(
                 """Acceptable values for this option are 1 / '1' / 'on' or
                 0 / '0' / 'off'"""
             )
 
-        self._instr_conn.write(
-            f":OUTPut:MODulation:STATe {new_state}"
-        )
+        self._instr_conn.write(f":OUTPut:MODulation:STATe {new_state}")
 
         if self._op_complete():
-            new_state = str(new_state)
-            self._mod_enabled = (
-                new_state.lower() == "1" or new_state.lower() == "on"
-            )
-            print(f"Modulation enabled set to {self._mod_enabled}")
+            print(f"Modulation enabled set to {new_state}")
         else:
             print(f"Error setting demodulation enabled to {new_state}")
 
     @property
     def phase_continuous(self):
-        """Phase Continuous Fine Sweep mode
-        """
-        bar = ["U01", "U02", "U04", "U06"]
-        if not any(option in self._options_string for option in bar):
-            raise RuntimeError("Functionality not available")
-            
-        if self._phase_cont_mode is None:
-            current_state = self._instr_conn.query(
-                ":SOURce:FREQuency:CONTinuous:MODE?", self.query_delay
-            )
-            self._phase_cont_mode = (
-                current_state.lower() == "1" or current_state.lower() == "on"
-            )
-        return self._phase_cont_mode
-        
-    @phase_continuous.setter
-    def phase_continuous(self, new_state: Union[int, str]):
-        """Sets Phase Continuous Fine Sweep Mode
-        """
-        bar = ["U01", "U02", "U04", "U06"]
-        if not any(option in self._options_string for option in bar):
+        """Phase Continuous Fine Sweep mode"""
+        supported_options = ["U01", "U02", "U04", "U06"]
+        if not any(
+            option in self.options_string for option in supported_options
+        ):
             raise RuntimeError("Functionality not available")
 
-        if not type(new_state) in (int, str):
+        current_state = self._instr_conn.query(
+            ":SOURce:FREQuency:CONTinuous:MODE?", self.query_delay
+        )
+
+        return current_state.lower() == "1" or current_state.lower() == "on"
+
+    @phase_continuous.setter
+    def phase_continuous(self, new_state: Union[int, str]):
+        """Sets Phase Continuous Fine Sweep Mode"""
+        supported_options = ["U01", "U02", "U04", "U06"]
+        if not any(
+            option in self._options_string for option in supported_options
+        ):
+            raise RuntimeError("Functionality not available")
+
+        if type(new_state) not in (int, str):
             raise ValueError(
                 """Acceptable values for this option are 1 / '1' / 'on' or
                 0 / '0' / 'off'"""
             )
-            
-        self._instr_conn.write(
-            f":SOURce:FREQuency:CONTinuous:MODE {new_state}"
-        )
+
+        self._instr_conn.write(f":SOURce:FREQuency:CONTinuous:MODE {new_state}")
 
         if self._op_complete():
-            new_state = str(new_state)
-            self._phase_cont_mode = (
-                new_state.lower() == "1" or new_state.lower() == "on"
-            )
-            print(f"Phase Continuous Fine Sweep Mode: {self._phase_cont_mode}")
+            print(f"Phase Continuous Fine Sweep Mode: {new_state}")
         else:
             print(f"Error setting demodulation enabled to {new_state}")
-            
+
     def set_phase_reference(self):
-        """Set the output phase reference to zero
-        
-        """
+        """Set the output phase reference to zero"""
         self._instr_conn.write(":SOURce:PHASe:REFerence")
-        
+
         if self._op_complete():
-            self._phase_ref_zeroed = True
+            self.phase_ref_zeroed = True
             print("Output phase reference set to zero")
         else:
             print("Error setting output phase reference to zero")
-            
+
     @property
     def mod_signal_phase(self):
-        """Returns current phase adjustment of a modulating signal in radians
-        
-        """
-        if self._phase_ref_zeroed is None:
+        """Returns current phase adjustment of a modulating signal in radians"""
+        if not self.phase_ref_zeroed:
             self.set_phase_reference()
-        
-        if self._phase_adjustment is None:
-            response = self._instr_conn.query(
-                ":SOURce:PHASe:ADJust?", self.query_delay
-            )
-            self._phase_adjustment = math.degrees(float(response))
-        return self._phase_adjustment
-        
-    @mod_signal_phase.setter(self, new_phase: Union[int, float]):
-        """Sets a new phase adjustment of a modulating signal, in degrees
-        
-        """
-        if self._phase_ref_zeroed is None:
+
+        response = self._instr_conn.query(
+            ":SOURce:PHASe:ADJust?", self.query_delay
+        )
+
+        return math.degrees(float(response))
+
+    @mod_signal_phase.setter
+    def mod_signal_phase(self, new_phase: Union[int, float]):
+        """Sets a new phase adjustment of a modulating signal, in degrees"""
+        if not self.phase_ref_zeroed:
             self.set_phase_reference()
-        
+
         self._instr_conn.write(f":SOURce:PHASe:ADJust {new_phase}DEG")
-        
+
         if self._op_complete():
-            self._phase_adjustment = new_phase
             print(f"Output phase reference set to {new_phase} DEG")
         else:
             print(f"Error setting phase reference to {new_phase} DEG")
-        

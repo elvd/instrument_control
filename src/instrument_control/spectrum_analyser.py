@@ -128,7 +128,8 @@ class SpectrumAnalyser:
         self.log_details()
 
     # WARN Does not get called when `exit()`-ing from a REPL. Context Manager?
-    def __del__(self):
+    # INFO Moved to `shutdown`, same as with the `SignalGenerator` class
+    def shutdown(self):
         """Destructor
 
         Makes sure to close the VISA connection to the instrument before the

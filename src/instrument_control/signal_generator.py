@@ -1,4 +1,4 @@
-"""Module holding Signal Generator Classes
+"""Signal Generator Class
 
 Currently only basic functionality for Keysight Signal Generators is included
 and supported. A lot of work to be done, including splitting this into base
@@ -55,7 +55,7 @@ class SignalGenerator:
         address: Union[str, int],
         instr_name: str = "SigGen",
         query_delay: float = 0.25,
-    ):
+    ) -> None:
         """Establishes a VISA connection to an instrument and presets it
 
         Establishes a remote connection to a Keysight Signal Generator,
@@ -138,7 +138,9 @@ class SignalGenerator:
         self.log_details()
 
     # WARN Does not get called when `exit()`-ing from a REPL. Context Manager?
-    def __del__(self):
+    # INFO Changed this to a `shutdown` function instead - call explicitly from
+    # INFO parent script. Context Manager in the future, I promise!
+    def shutdown(self):
         """Destructor
 
         Makes sure to close the VISA connection to the instrument before the
@@ -149,6 +151,9 @@ class SignalGenerator:
             ":DIAGnostic:INFOrmation:OTIMe?", self.query_delay
         )
         self.logger.info(f"Instrument has been on for {response} hours")
+
+        self.output = "off"
+        self.mod_state = "off"
 
         self._instr_conn.close()
 
@@ -413,12 +418,6 @@ class SignalGenerator:
                        Other values will fail silently. This is still converted
                        to a boolean value internally.
         """
-        if type(new_state) not in (int, str):
-            raise ValueError(
-                """Acceptable values for this option are 1 / '1' / 'on' or
-                0 / '0' / 'off'"""
-            )
-
         self._instr_conn.write(f":OUTPut:STATe {new_state}")
 
         if self._op_complete():
@@ -462,12 +461,6 @@ class SignalGenerator:
         if "UNT" not in self.options_string and self.model_number != "E8267D":
             raise RuntimeError("Functionality not available")
 
-        if type(new_state) not in (int, str):
-            raise ValueError(
-                """Acceptable values for this option are 1 / '1' / 'on' or
-                0 / '0' / 'off'"""
-            )
-
         self._instr_conn.write(f":OUTPut:MODulation:STATe {new_state}")
 
         if self._op_complete():
@@ -500,12 +493,6 @@ class SignalGenerator:
             option in self.options_string for option in supported_options
         ):
             raise RuntimeError("Functionality not available")
-
-        if type(new_state) not in (int, str):
-            raise ValueError(
-                """Acceptable values for this option are 1 / '1' / 'on' or
-                0 / '0' / 'off'"""
-            )
 
         self._instr_conn.write(f":SOURce:FREQuency:CONTinuous:MODE {new_state}")
 

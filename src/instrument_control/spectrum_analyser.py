@@ -8,12 +8,33 @@ from __future__ import annotations
 
 import sys
 import time
+from dataclasses import dataclass
 from ipaddress import ip_address
 from typing import Union
 
 import loguru
 import numpy as np
 import pyvisa
+import sigmf
+from sigmf import SigMFFile
+from sigmf.utils import get_data_type_str, get_sigmf_iso8601_datetime_now
+
+
+@dataclass
+class ExperimentMetadata:
+    base_name: str = "SAC-SimpleRx"
+    description: str = "Calibration recording"
+    author: str = "v.doychinov@bradford.ac.uk"
+
+
+@dataclass
+class SpectrumAnalyserProperties:
+    start_frequency: int = int(950e6)
+    stop_frequency: int = int(1050e6)
+    npts: int = 501
+    rbw: int = int(10e3)
+    vbw: int = int(1e6)
+    model: str = "N9042B"
 
 
 class SpectrumAnalyser:
@@ -412,3 +433,36 @@ class SpectrumAnalyser:
     # - Amplitude settings - attenuation, reference levels
     # - Measurements - averaging on/off/number of averages; types of averaging
     # - Markers, including peak search
+
+
+def save_spectrum_data(
+    data: np._ArrayFloat64_co,
+    parameters: SpectrumAnalyserProperties,
+    metadata: ExperimentMetadata,
+):
+    timestamp = get_sigmf_iso8601_datetime_now()
+    filename = f"{metadata.base_name}-{parameters.model}-{timestamp}.sigmf-data"
+
+    data.tofile(filename)
+
+    sigmf_metadata = SigMFFile(
+        data_file=filename,
+        global_info={
+            SigMFFile.DATATYPE_KEY: get_data_type_str(data),
+            SigMFFile.AUTHOR_KEY: metadata.author,
+            SigMFFile.DESCRIPTION_KEY: metadata.description,
+            SigMFFile.VERSION_KEY: sigmf.__version__,
+            SigMFFile.DATETIME_KEY: timestamp,
+            SigMFFile.HW_KEY: parameters.model,
+            SigMFFile.FLO_KEY: parameters.start_frequency,
+            SigMFFile.FHI_KEY: parameters.stop_frequency,
+            SigMFFile.SAMPLE_RATE_KEY: parameters.npts,
+            SigMFFile.COMMENT_KEY: (
+                f"RBW: {parameters.rbw}, VBW: {parameters.vbw}"
+            ),
+        },
+    )
+
+    sigmf_metadata.tofile(
+        f"{metadata.base_name}-{parameters.model}-{timestamp}.sigmf-meta"
+    )

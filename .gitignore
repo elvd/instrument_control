@@ -18,3 +18,5 @@ uv.lock
 
 *.log
 *.pdf
+
+*.sigmf-*

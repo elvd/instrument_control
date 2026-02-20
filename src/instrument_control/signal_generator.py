@@ -137,7 +137,6 @@ class SignalGenerator:
         self.reset()
         self.log_details()
 
-    # WARN Does not get called when `exit()`-ing from a REPL. Context Manager?
     # INFO Changed this to a `shutdown` function instead - call explicitly from
     # INFO parent script. Context Manager in the future, I promise!
     def shutdown(self):

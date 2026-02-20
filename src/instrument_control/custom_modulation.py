@@ -54,11 +54,11 @@ class RTIQBaseband:
 
     @property
     def filter_alpha(self) -> float:
-        current_value = self.instrument._instr_conn.query(
-            ":SOURce:RADio:CUSTom:ALPHa?", self.instrument.query_delay
+        return float(
+            self.instrument._instr_conn.query(
+                ":SOURce:RADio:CUSTom:ALPHa?", self.instrument.query_delay
+            )
         )
-
-        return float(current_value)
 
     @filter_alpha.setter
     def filter_alpha(self, new_value: float):
@@ -77,11 +77,9 @@ class RTIQBaseband:
 
     @property
     def data_pattern(self) -> str:
-        current_value = self.instrument._instr_conn.query(
+        return self.instrument._instr_conn.query(
             ":SOURce:RADio:CUSTom:DATA?", self.instrument.query_delay
         )
-
-        return current_value
 
     @data_pattern.setter
     def data_pattern(self, pattern_id: str):
@@ -113,11 +111,9 @@ class RTIQBaseband:
 
     @property
     def modulation_type(self) -> str:
-        current_value = self.instrument._instr_conn.query(
+        return self.instrument._instr_conn.query(
             ":SOURce:RADio:CUSTom:MODulation:TYPE?", self.instrument.query_delay
         )
-
-        return current_value
 
     @modulation_type.setter
     def modulation_type(self, modulation: str):
@@ -173,13 +169,13 @@ class RTIQBaseband:
 
     @property
     def symbol_rate(self) -> int:
-        current_value = self.instrument._instr_conn.query(
-            ":SOURce:RADio:CUSTom:SRATe?", self.instrument.query_delay
+        return int(
+            float(
+                self.instrument._instr_conn.query(
+                    ":SOURce:RADio:CUSTom:SRATe?", self.instrument.query_delay
+                )
+            )
         )
-
-        current_value = int(float(current_value))
-
-        return current_value
 
     @symbol_rate.setter
     def symbol_rate(self, new_rate: Union[int, float]):

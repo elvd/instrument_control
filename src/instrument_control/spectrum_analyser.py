@@ -12,6 +12,7 @@ from ipaddress import ip_address
 from typing import Union
 
 import loguru
+import numpy as np
 import pyvisa
 
 
@@ -127,7 +128,6 @@ class SpectrumAnalyser:
         self.reset()
         self.log_details()
 
-    # WARN Does not get called when `exit()`-ing from a REPL. Context Manager?
     # INFO Moved to `shutdown`, same as with the `SignalGenerator` class
     def shutdown(self):
         """Destructor
@@ -220,6 +220,8 @@ class SpectrumAnalyser:
         self._instr_conn.write("*CLS")
         time.sleep(self.query_delay)
         self._instr_conn.write(":INIT:CONT ON")
+        time.sleep(self.query_delay)
+        self._instr_conn.write(":CONFigure:SANalyzer")
 
         self.logger.info("Instrument reset and initialised")
 
@@ -247,3 +249,166 @@ class SpectrumAnalyser:
         self.logger.info(f"Instrument model number: {self.model_number}")
         self.logger.info(f"Instrument serial number: {self.serial_number}")
         self.logger.info(f"Instrument firmware version: {self.fw_version}")
+
+    @property
+    def centre_frequency(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(
+                    ":SENSe:FREQuency:CENTer?", self.query_delay
+                )
+            )
+        )
+
+    @centre_frequency.setter
+    def centre_frequency(self, new_frequency: Union[int, float]):
+        self._instr_conn.write(f":SENSe:FREQuency:CENTer {new_frequency}Hz")
+
+        if self._op_complete():
+            self.logger.info(f"Centre frequency set to {new_frequency:.3e} Hz")
+        else:
+            self.logger.info(
+                f"Error setting centre frequency to {new_frequency:.3e} Hz"
+            )
+
+    @property
+    def frequency_span(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(
+                    ":SENSe:FREQuency:SPAN?", self.query_delay
+                )
+            )
+        )
+
+    @frequency_span.setter
+    def frequency_span(self, new_span: Union[int, float]):
+        self._instr_conn.write(f":SENSe:FREQuency:SPAN {new_span}Hz")
+
+        if self._op_complete():
+            self.logger.info(f"Frequency span set to {new_span:.3e} Hz")
+        else:
+            self.logger.info(
+                f"Error setting frequency span to {new_span:.3e} Hz"
+            )
+
+    @property
+    def start_frequency(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(
+                    ":SENSe:FREQuency:STARt?", self.query_delay
+                )
+            )
+        )
+
+    @start_frequency.setter
+    def start_frequency(self, new_frequency: Union[int, float]):
+        self._instr_conn.write(f":SENSe:FREQuency:STARt {new_frequency}Hz")
+
+        if self._op_complete():
+            self.logger.info(f"Start frequency set to {new_frequency:.3e} Hz")
+        else:
+            self.logger.info(
+                f"Error setting start frequency to {new_frequency:.3e} Hz"
+            )
+
+    @property
+    def stop_frequency(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(
+                    ":SENSe:FREQuency:STOP?", self.query_delay
+                )
+            )
+        )
+
+    @stop_frequency.setter
+    def stop_frequency(self, new_frequency: Union[int, float]):
+        self._instr_conn.write(f":SENSe:FREQuency:STOP {new_frequency}Hz")
+
+        if self._op_complete():
+            self.logger.info(f"Stop frequency set to {new_frequency:.3e} Hz")
+        else:
+            self.logger.info(
+                f"Error setting stop frequency to {new_frequency:.3e} Hz"
+            )
+
+    @property
+    def sweep_points(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(":SENSe:SWEep:POINts?", self.query_delay)
+            )
+        )
+
+    @sweep_points.setter
+    def sweep_points(self, npts: int):
+        self._instr_conn.write(f":SENSe:SWEep:POINts {npts}")
+
+        if self._op_complete():
+            self.logger.info(f"Number of points set to {npts}")
+        else:
+            self.logger.info(f"Error setting number of points to {npts}")
+
+    @property
+    def vbw(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(
+                    ":SENSe:BANDwidth:VIDeo?", self.query_delay
+                )
+            )
+        )
+
+    @vbw.setter
+    def vbw(self, new_bw: Union[int, float]):
+        self._instr_conn.write(f":SENSe:BANDwidth:VIDeo {new_bw}Hz")
+
+        if self._op_complete():
+            self.logger.info(f"Video bandwidth set to {new_bw} Hz")
+        else:
+            self.logger.info(f"Error setting video bandwidth to {new_bw} Hz")
+
+    @property
+    def rbw(self) -> int:
+        return int(
+            float(
+                self._instr_conn.query(
+                    ":SENSe:BANDwidth:RESolution?", self.query_delay
+                )
+            )
+        )
+
+    @rbw.setter
+    def rbw(self, new_bw: Union[int, float]):
+        self._instr_conn.write(f":SENSe:BANDwidth:RESolution {new_bw}Hz")
+
+        if self._op_complete():
+            self.logger.info(f"Resolution bandwidth set to {new_bw} Hz")
+        else:
+            self.logger.info(
+                f"Error setting resolution bandwidth to {new_bw} Hz"
+            )
+
+    @property
+    def sweep_time(self) -> float:
+        return float(
+            self._instr_conn.query(":SENSe:SWEep:TIME?", self.query_delay)
+        )
+
+    def read_data(self, trace: int) -> np._ArrayFloat64_co:
+        data = self._instr_conn.query(
+            f":READ:SANalyzer{trace}?", self.query_delay
+        )
+
+        data = data.split(",")
+        data = np.array(data[1::2]).astype(np.float64)
+
+        return data
+
+    # TODO - list of functions to implement
+    # - Fetch measurements, transform into an array, save as a data file
+    # - Amplitude settings - attenuation, reference levels
+    # - Measurements - averaging on/off/number of averages; types of averaging
+    # - Markers, including peak search

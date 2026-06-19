@@ -52,7 +52,7 @@ class SignalGenerator:
 
     def __init__(
         self,
-        address: Union[str, int],
+        address: str | int,
         instr_name: str = "SigGen",
         query_delay: float = 0.25,
     ) -> None:
@@ -83,25 +83,23 @@ class SignalGenerator:
                           a remote connection to the instrument cannot be
                           established.
         """
-        self.name = instr_name
+        self.name: str = instr_name
         self.logger = self.__get_logger()
 
         if isinstance(address, str):
             try:
-                ip_address(address)
+                _ = ip_address(address)
                 instr_address = f"TCPIP0::{address}::inst0::INSTR"
             except ValueError as error:
                 self.logger.warning(f"{address} is not a valid IP address")
                 raise ValueError("Please use a valid IP address") from error
 
-        elif isinstance(address, int):
+        else:
             if 0 <= address <= 30:
                 instr_address = f"GPIB0::{address}::INSTR"
             else:
                 self.logger.warning(f"{address} is not a valid GPIB address")
                 raise ValueError("Please use a valid GPIB address")
-        else:
-            raise RuntimeError("Only IPv4 and GPIB addresses are supported")
 
         self._rm = pyvisa.ResourceManager()
 

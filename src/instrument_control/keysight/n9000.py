@@ -23,7 +23,7 @@ from sigmf.utils import get_data_type_str, get_sigmf_iso8601_datetime_now
 @dataclass
 class ExperimentMetadata:
     base_name: str = "SAC-SimpleRx"
-    description: str = "Calibration recording"
+    description: str = "TEST_1 recording"
     author: str = "v.doychinov@bradford.ac.uk"
 
 
@@ -429,7 +429,6 @@ class SpectrumAnalyser:
         return data
 
     # TODO - list of functions to implement
-    # - Fetch measurements, transform into an array, save as a data file
     # - Amplitude settings - attenuation, reference levels
     # - Measurements - averaging on/off/number of averages; types of averaging
     # - Markers, including peak search

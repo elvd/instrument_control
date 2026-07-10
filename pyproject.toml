@@ -1,11 +1,9 @@
 [project]
 name = "instrument-control"
 version = "0.1.0"
-description = "Add your description here"
+description = "A library for the remote control of RF instruments"
 readme = "README.md"
-authors = [
-    { name = "Viktor Doychinov", email = "v.doychinov@bradford.ac.uk" }
-]
+authors = [{ name = "Viktor Doychinov", email = "v.doychinov@bradford.ac.uk" }]
 requires-python = ">=3.12"
 dependencies = [
     "loguru>=0.7.3",

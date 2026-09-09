@@ -1,5 +1,6 @@
 from ...common.base import Instrument
 from .cw import CW
+from .sweep import Sweep
 
 
 class SignalGenerator(Instrument):
@@ -13,3 +14,4 @@ class SignalGenerator(Instrument):
         super().__init__(address, instrument_name, query_delay)
 
         self.cw = CW(self)
+        self.sweep = Sweep(self)

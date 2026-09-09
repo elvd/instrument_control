@@ -1,7 +1,7 @@
 [project]
 name = "instrument-control"
 version = "0.1.0"
-description = "A library for the remote control of RF instruments"
+description = "A suite of tools for the remote control of RF instruments"
 readme = "README.md"
 authors = [{ name = "Viktor Doychinov", email = "v.doychinov@bradford.ac.uk" }]
 requires-python = ">=3.12"

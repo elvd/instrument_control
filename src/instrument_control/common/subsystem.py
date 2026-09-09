@@ -13,5 +13,5 @@ class Subsystem:
         self.instrument.write(command)
 
     def query(self, command: str) -> str:
-        response = self.instrument.query(command, self.instrument.query_delay)
+        response = self.instrument.query(command)
         return str(response)

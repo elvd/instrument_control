@@ -16,7 +16,7 @@ class SCPIProperty:
 
     def __get__(self, obj, owner):
         if self.cast:
-            return self.cast(obj.query(self.get_cmd, obj.query_delay))
+            return self.cast(obj.query(self.get_cmd))
         else:
             raise RuntimeError("This property can only be invoked")
 

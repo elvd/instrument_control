@@ -1,7 +1,8 @@
-"""Basic Signal Generator Class for Siglent SSG5060X-V
+"""Basic instrument class that holds a VISA connection plus basic commands
 
 This supports basic initialisation of the instrument, standard IEEE488.2
-commands, and brings together the individual subsystems.
+commands, plus wrappers for `write` and `query` methods. Inherited by specific
+instrument classes which also bring together the various subsystem classes.
 """
 
 import time
@@ -18,10 +19,9 @@ class Instrument:
     ) -> None:
         """Establishes a VISA connection to an instrument and resets it
 
-        Establishes a remote connection to the Signal Generator,
+        Establishes a remote connection to an instrument to be controlled,
         over either GPIB or LAN interface. Resets the instrument and allows
-        programmatic control over CW frequency, RF output power, and
-        output state.
+        programmatic control over its various parameters and functionalities.
 
         Args:
             address: A `str` with an IPv4 address.

@@ -1,8 +1,10 @@
 from typing import final
 
+
 from ...common.base import Instrument
 from .cw import CW
 from .sweep import Sweep
+from .system_settings import SystemSettings
 
 
 @final
@@ -18,3 +20,4 @@ class SignalGenerator(Instrument):
 
         self.cw: CW = CW(instrument=self)
         self.sweep: Sweep = Sweep(instrument=self)
+        self.system: SystemSettings = SystemSettings(instrument=self)

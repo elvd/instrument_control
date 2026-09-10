@@ -44,3 +44,7 @@ class SystemSettings(Subsystem):
     system_config: SCPIProperty = SCPIProperty(
         get_cmd=":SYSTem:CONFigure:SYSTem?", set_cmd="", cast=str
     )
+
+    instrument_mode: SCPIProperty = SCPIProperty(
+        get_cmd=":INSTrument:SELect?", set_cmd=":INSTrument:SELect {}", cast=str
+    )

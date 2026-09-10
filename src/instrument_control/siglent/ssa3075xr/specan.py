@@ -2,22 +2,18 @@ from typing import final
 
 
 from ...common.base import Instrument
-from .cw import CW
-from .sweep import Sweep
 from .system_settings import SystemSettings
 
 
 @final
-class SignalGenerator(Instrument):
+class SpectrumAnalyser(Instrument):
     def __init__(
         self,
         address: str,
-        instrument_name: str = "SSG5060X-V",
+        instrument_name: str = "SSA3075X-R",
         query_delay: float = 0.25,
     ) -> None:
 
         super().__init__(address, instrument_name, query_delay)
 
         self.system: SystemSettings = SystemSettings(instrument=self)
-        self.cw: CW = CW(instrument=self)
-        self.sweep: Sweep = Sweep(instrument=self)

@@ -1,4 +1,4 @@
-"""CW Mode Commands and Properties
+"""CW Mode Commands and Properties for Siglent SSG5060X-V
 
 This holds the basic CW functionality of the signal generator - setting power
 and frequency, enabling and disabling the RF output of the instrument.
@@ -31,7 +31,7 @@ class CW(Subsystem):
         cast=int,
     )
 
-    amplitude: SCPIProperty = SCPIProperty(
+    power: SCPIProperty = SCPIProperty(
         get_cmd=":SOURce:POWer:LEVel:IMMediate:AMPlitude?",
         set_cmd=":SOURce:POWer:LEVel:IMMediate:AMPlitude {} dBm",
         cast=float,

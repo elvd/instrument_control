@@ -1,8 +1,11 @@
+from typing import final
+
 from ...common.base import Instrument
 from .cw import CW
 from .sweep import Sweep
 
 
+@final
 class SignalGenerator(Instrument):
     def __init__(
         self,
@@ -13,5 +16,5 @@ class SignalGenerator(Instrument):
 
         super().__init__(address, instrument_name, query_delay)
 
-        self.cw = CW(self)
-        self.sweep = Sweep(self)
+        self.cw: CW = CW(instrument=self)
+        self.sweep: Sweep = Sweep(instrument=self)

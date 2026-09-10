@@ -27,6 +27,8 @@ class Sweep(Subsystem):
     Attributes:
     """
 
+    # TODO: Add Sweep List functionality
+
     state: SCPIProperty = SCPIProperty(
         get_cmd=":SOURce:SWEep:STATe?",
         set_cmd=":SOURce:SWEep:STATe {}",
@@ -79,6 +81,24 @@ class Sweep(Subsystem):
         cast=str,
     )
 
+    lin_log: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:STEP:SPACe?",
+        set_cmd=":SOURce:SWEep:STEP:SPACe {}",
+        cast=str,
+    )
+
+    lin_step: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:FREQuency:STEP:LINear?",
+        set_cmd=":SOURce:SWEep:FREQuency:STEP:LINear {} Hz",
+        cast=float,
+    )
+
+    log_step: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:FREQuency:STEP:LOGarithmic?",
+        set_cmd=":SOURce:SWEep:FREQuency:STEP:LOGarithmic {}",
+        cast=float,
+    )
+
     direction: SCPIProperty = SCPIProperty(
         get_cmd=":SOURce:SWEep:DIRect?",
         set_cmd=":SOURce:SWEep:DIRect {}",
@@ -87,4 +107,38 @@ class Sweep(Subsystem):
 
     mode: SCPIProperty = SCPIProperty(
         get_cmd=":SOURce:SWEep:MODE?", set_cmd=":SOURce:SWEep:MODE {}", cast=str
+    )
+
+    single_sweep: SCPIProperty = SCPIProperty(
+        get_cmd="", set_cmd=":SOURce:SWEep:EXECute", cast=None
+    )
+
+    sweep_trigger_mode: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:TRIGger:TYPE?",
+        set_cmd=":SOURce:SWEep:TRIGger:TYPE {}",
+        cast=str,
+    )
+
+    point_trigger_mode: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:POINt:TRIGger:TYPE?",
+        set_cmd=":SOURce:SWEep:POINt:TRIGger:TYPE {}",
+        cast=str,
+    )
+
+    trigger_slope: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:INPut:TRIGger:SLOPe?",
+        set_cmd=":SOURce:INPut:TRIGger:SLOPe {}",
+        cast=str,
+    )
+
+    current_point: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:CURRent:DATA?", set_cmd="", cast=str
+    )
+
+    current_freq: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:CURRent:FREQuency?", set_cmd="", cast=float
+    )
+
+    current_power: SCPIProperty = SCPIProperty(
+        get_cmd=":SOURce:SWEep:CURRent:LEVel?", set_cmd="", cast=float
     )
